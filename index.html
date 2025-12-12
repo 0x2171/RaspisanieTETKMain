@@ -1,245 +1,407 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Расписание ТЭТК</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
-* { box-sizing: border-box; }
-body { margin: 0; font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: #f2f3f5; color: #222; }
-header { background: #4680c2; color: white; padding: 14px 16px; text-align: center; font-size: 18px; font-weight: 600; position: sticky; top: 0; z-index: 10; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
-main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
-#fileListTitle { font-size: 16px; font-weight: 600; margin: 6px 0 4px 2px; color: #555; }
-#fileList { padding-bottom: 8px; }
-.fileItem { display: flex; align-items: center; background: white; padding: 10px 12px; margin-bottom: 8px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
-.fileItem:active { transform: scale(0.97); box-shadow: 0 0 0 rgba(0,0,0,0.1); }
-.fileIcon { width: 28px; height: 28px; margin-right: 10px; flex-shrink: 0; }
-.fileName { font-size: 15px; font-weight: 500; flex-grow: 1; word-break: break-word; }
-.fileMeta { font-size: 12px; color: #888; margin-top: 2px; }
-#excelTitle { margin: 8px 2px 4px 2px; font-size: 16px; font-weight: 600; color: #555; display: none; }
-#excelView { margin-top: 4px; }
-.hint { font-size: 13px; color: #777; margin: 4px 2px 10px 2px; display: none; }
-.dayCard { background: white; margin-bottom: 10px; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.dayHeader { font-weight: 600; margin-bottom: 6px; font-size: 14px; color: #333; display: flex; align-items: center; gap: 6px; }
-.dayDot { width: 6px; height: 6px; border-radius: 50%; background: #4680c2; }
-.lessonRow { display: flex; align-items: flex-start; padding: 6px 0; border-top: 1px solid #f0f0f0; gap: 8px; }
-.lessonRow:first-of-type { border-top: none; }
-.lessonTime { font-size: 12px; color: #666; width: 70px; flex-shrink: 0; }
-.lessonInfo { flex-grow: 1; font-size: 14px; }
-.lessonSubject { font-weight: 500; margin-bottom: 2px; white-space: pre-line; }
-.lessonRoom { font-size: 12px; color: #888; }
-.badgeGroup { display: inline-flex; align-items: center; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: #e3efff; color: #2d5fa4; margin-left: 4px; }
-#groupModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 20; padding: 10px; }
-#groupModal { background: white; border-radius: 14px; padding: 14px 14px 12px 14px; width: 100%; max-width: 360px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); animation: pop .16s ease-out; }
-@keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-#groupModalTitle { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-#groupModalSub { font-size: 12px; color: #777; margin-bottom: 8px; }
-#groupList { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.groupChip { padding: 6px 10px; border-radius: 999px; border: 1px solid #d0ddf5; font-size: 13px; background: #f5f7ff; color: #2d5fa4; cursor: pointer; transition: background .12s ease, transform .12s ease; display: inline-flex; align-items: center; gap: 4px; }
-.groupChip svg { width: 14px; height: 14px; }
-.groupChip:active { transform: translateY(1px); background: #e5edff; }
-#groupModalFooter { text-align: right; font-size: 12px; color: #999; }
-.loaderDark { display: inline-block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #c9d5eb; border-top-color: #8597c6; animation: spin .6s linear infinite; margin-right: 6px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.footer-signature { text-align: center; padding: 20px 10px 30px; font-size: 13px; color: #888; line-height: 1.5; }
-.footer-signature a { color: #4680c2; text-decoration: none; }
-.footer-signature a:hover { text-decoration: underline; }
-@media (max-width: 480px) { header { font-size: 16px; } .fileItem { padding: 9px 10px; } .lessonTime { width: 66px; } }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Расписание ТЭТК</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: #f2f3f5; color: #222; }
+    header { background: #4680c2; color: white; padding: 14px 16px; text-align: center; font-size: 18px; font-weight: 600; position: sticky; top: 0; z-index: 10; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+    main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
+    #fileListTitle { font-size: 16px; font-weight: 600; margin: 6px 0 4px 2px; color: #555; }
+    #fileList { padding-bottom: 8px; }
+    .fileItem { display: flex; align-items: center; background: white; padding: 10px 12px; margin-bottom: 8px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+    .fileItem:active { transform: scale(0.97); box-shadow: 0 0 0 rgba(0,0,0,0.1); }
+    .fileIcon { width: 28px; height: 28px; margin-right: 10px; flex-shrink: 0; }
+    .fileName { font-size: 15px; font-weight: 500; flex-grow: 1; word-break: break-word; }
+    .fileMeta { font-size: 12px; color: #888; margin-top: 2px; }
+    #excelTitle { margin: 8px 2px 4px 2px; font-size: 16px; font-weight: 600; color: #555; display: none; }
+    #excelView { margin-top: 4px; }
+    .hint { font-size: 13px; color: #777; margin: 4px 2px 10px 2px; display: none; }
+
+    /* Export bar */
+    .exportBar { position: sticky; top: 52px; z-index: 9; margin: 10px 0; display: none; }
+    .exportBtn {
+      width: 100%; border: 0; border-radius: 12px; padding: 12px 14px;
+      font-size: 15px; font-weight: 600; background: #2d5fa4; color: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15); cursor: pointer;
+    }
+    .exportBtn:active { transform: scale(0.99); }
+    .exportBtn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+    .dayCard { background: white; margin-bottom: 10px; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .dayHeader { font-weight: 600; margin-bottom: 6px; font-size: 14px; color: #333; display: flex; align-items: center; gap: 6px; }
+    .dayDot { width: 6px; height: 6px; border-radius: 50%; background: #4680c2; }
+    .lessonRow { display: flex; align-items: flex-start; padding: 6px 0; border-top: 1px solid #f0f0f0; gap: 8px; }
+    .lessonRow:first-of-type { border-top: none; }
+    .lessonTime { font-size: 12px; color: #666; width: 70px; flex-shrink: 0; }
+    .lessonInfo { flex-grow: 1; font-size: 14px; }
+    .lessonSubject { font-weight: 500; margin-bottom: 2px; white-space: pre-line; }
+    .lessonRoom { font-size: 12px; color: #888; }
+    .badgeGroup { display: inline-flex; align-items: center; font-size: 11px; padding: 2px 6px; border-radius: 999px; background: #e3efff; color: #2d5fa4; margin-left: 4px; }
+
+    #groupModalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 20; padding: 10px; }
+    #groupModal { background: white; border-radius: 14px; padding: 14px 14px 12px 14px; width: 100%; max-width: 360px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); animation: pop .16s ease-out; }
+    @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    #groupModalTitle { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    #groupModalSub { font-size: 12px; color: #777; margin-bottom: 8px; }
+    #groupList { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .groupChip { padding: 6px 10px; border-radius: 999px; border: 1px solid #d0ddf5; font-size: 13px; background: #f5f7ff; color: #2d5fa4; cursor: pointer; transition: background .12s ease, transform .12s ease; display: inline-flex; align-items: center; gap: 4px; }
+    .groupChip svg { width: 14px; height: 14px; }
+    .groupChip:active { transform: translateY(1px); background: #e5edff; }
+    #groupModalFooter { text-align: right; font-size: 12px; color: #999; }
+
+    .loaderDark { display: inline-block; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #c9d5eb; border-top-color: #8597c6; animation: spin .6s linear infinite; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .footer-signature { text-align: center; padding: 20px 10px 30px; font-size: 13px; color: #888; line-height: 1.5; }
+    .footer-signature a { color: #4680c2; text-decoration: none; }
+    .footer-signature a:hover { text-decoration: underline; }
+    @media (max-width: 480px) { header { font-size: 16px; } .fileItem { padding: 9px 10px; } .lessonTime { width: 66px; } }
+  </style>
 </head>
+
 <body>
+  <header>Расписание ТЭТК</header>
 
-<header>Расписание ТЭТК</header>
+  <main>
+    <div id="fileListTitle">Файлы с расписанием:</div>
+    <div id="fileList">Загрузка файлов из VK…</div>
 
-<main>
-   <div id="fileListTitle">Файлы с расписанием:</div>
-   <div id="fileList">Загрузка файлов из VK…</div>
-   <div id="excelTitle"></div>
-   <div class="hint" id="groupHint">Показано расписание выбранной группы.</div>
-   <div id="excelView"></div>
-</main>
+    <div id="excelTitle"></div>
 
-<div class="footer-signature">
-   Сделано 22|48 при поддержке Lilifox<br>
-   Все вопросы к <a href="https://t.me/X0SB5" target="_blank">@X0SB5</a>
-</div>
+    <div class="hint" id="groupHint">Показано расписание выбранной группы.</div>
 
-<div id="groupModalOverlay">
-   <div id="groupModal">
-       <div id="groupModalTitle">Выберите вашу группу</div>
-       <div id="groupModalSub"></div>
-       <div id="groupList"></div>
-       <div id="groupModalFooter">Нажмите на группу, чтобы показать расписание</div>
-   </div>
-</div>
+    <div class="exportBar" id="exportBar">
+      <button class="exportBtn" id="exportBtn">Экспорт фото</button>
+    </div>
 
-<script>
-const PROXY_URL = "https://raspisanietetk.onrender.com";
+    <div id="excelView"></div>
+  </main>
 
-let currentRows = null;
-let currentGroups = null;
-let currentFileTitle = "";
-let pendingGroupResolve = null;
+  <div class="footer-signature">
+    Сделано 22|48 при поддержке Lilifox<br>
+    Все вопросы к <a href="https://t.me/X0SB5" target="_blank">@X0SB5</a>
+  </div>
 
-const xlsIconSvg = `<svg class="fileIcon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2e7d32"></rect><path d="M9 8 L11 12 L9 16 M15 8 L13 12 L15 16" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"></path></svg>`;
-const groupIconSvg = `<svg viewBox="0 0 24 24"><path d="M12 12c1.66 0 2.99-1.34 2.99-3S13.66 6 12 6 9.01 7.34 9.01 9 10.34 12 12 12zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-1.5C19 15.17 14.33 14 12 14z" fill="#2d5fa4"></path></svg>`;
+  <div id="groupModalOverlay">
+    <div id="groupModal">
+      <div id="groupModalTitle">Выберите вашу группу</div>
+      <div id="groupModalSub"></div>
+      <div id="groupList"></div>
+      <div id="groupModalFooter">Нажмите на группу, чтобы показать расписание</div>
+    </div>
+  </div>
 
-async function sendLogToServer(type, data) {
-   try {
-       await fetch(`${PROXY_URL}/log`, {
-           method: "POST",
-           headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({ type, data })
-       });
-   } catch (e) {}
-}
+  <script>
+    const PROXY_URL = "https://raspisanietetk.onrender.com";
 
-function getTelegramUserInfo() {
-   try { return window.Telegram?.WebApp?.initDataUnsafe?.user || null; } catch (e) { return null; }
-}
+    const BOT_USERNAME = "RaspisanieTETK_bot";
 
-async function logTelegramWebAppUser() {
-   const user = getTelegramUserInfo();
-   if (!user) return;
-   await sendLogToServer("user", user);
-}
+    let currentRows = null;
+    let currentGroups = null;
+    let currentFileTitle = "";
+    let pendingGroupResolve = null;
+    let selectedGroupNameGlobal = "";
 
-async function logTelegramGroupSelection(groupName) {
-   const user = getTelegramUserInfo();
-   await sendLogToServer("group", { groupName, user });
-}
+    const xlsIconSvg = `<svg class="fileIcon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2e7d32"></rect><path d="M9 8 L11 12 L9 16 M15 8 L13 12 L15 16" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"></path></svg>`;
+    const groupIconSvg = `<svg viewBox="0 0 24 24"><path d="M12 12c1.66 0 2.99-1.34 2.99-3S13.66 6 12 6 9.01 7.34 9.01 9 10.34 12 12 12zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-1.5C19 15.17 14.33 14 12 14z" fill="#2d5fa4"></path></svg>`;
 
-async function loadFiles() {
-   const listDiv = document.getElementById("fileList");
-   listDiv.innerHTML = "Загрузка файлов из VK…";
-   try {
-       const res = await fetch(`${PROXY_URL}/getFiles`);
-       if (!res.ok) throw new Error("Статус " + res.status);
-       const data = await res.json();
-       const files = data.files;
-       if (!files.length) { listDiv.innerHTML = "XLSX-файлы не найдены."; return; }
-       listDiv.innerHTML = "";
-       files.forEach(f => {
-           const el = document.createElement("div");
-           el.className = "fileItem";
-           el.onclick = () => openExcelWithGroupSelection(f.url, f.title);
-           el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">Расписание</div></div>`;
-           listDiv.appendChild(el);
-       });
-   } catch (e) { listDiv.innerHTML = "Ошибка VK: " + e.message; }
-}
+    async function sendLogToServer(type, data) {
+      try {
+        await fetch(`${PROXY_URL}/log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type, data })
+        });
+      } catch (e) {}
+    }
 
-async function openExcelWithGroupSelection(url, title) {
-   const view = document.getElementById("excelView");
-   const titleEl = document.getElementById("excelTitle");
-   const hint = document.getElementById("groupHint");
-   titleEl.style.display = "block";
-   titleEl.textContent = title;
-   hint.style.display = "none";
-   view.innerHTML = `<div style="padding:15px;text-align:center;color:#555;"><div class="loaderDark"></div> Загрузка расписания…</div>`;
-   try {
-       const res = await fetch(PROXY_URL + "/?url=" + encodeURIComponent(url));
-       if (!res.ok) throw new Error("Статус " + res.status);
-       const buf = await res.arrayBuffer();
-       const wb = XLSX.read(buf, {type: "array"});
-       const sheet = wb.Sheets[wb.SheetNames[0]];
-       const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:""});
-       currentRows = rows;
-       currentGroups = detectGroups(rows);
-       currentFileTitle = title;
-       if (currentGroups.length === 0) { view.innerHTML = "Группы не найдены в файле."; return; }
-       const group = await askForGroup(currentGroups, title);
-       renderSchedule(group);
-   } catch (err) { view.innerHTML = "Ошибка загрузки: " + err.message; }
-}
+    function getTelegramUserInfo() {
+      try { return window.Telegram?.WebApp?.initDataUnsafe?.user || null; }
+      catch (e) { return null; }
+    }
 
-function detectGroups(rows) {
-   let headerRow = -1;
-   for (let i = 0; i < rows.length; i++) {
-       const cell = rows[i][0];
-       if (cell && /суббота|понедельник|вторник|среда|четверг|пятница/i.test(cell)) { headerRow = i; break; }
-   }
-   if (headerRow === -1) return [];
-   const row = rows[headerRow];
-   const groups = [];
-   for (let c = 3; c < row.length - 1; c++) {
-       const name = (row[c] || "").toString().trim();
-       const next = (row[c+1] || "").toString().trim();
-       if (name && next === "Ауд." && !name.includes("Ауд.")) groups.push({ name, col: c, colRoom: c+1 });
-   }
-   return groups;
-}
+    async function logTelegramWebAppUser() {
+      const user = getTelegramUserInfo();
+      if (!user) return;
+      await sendLogToServer("user", user);
+    }
 
-function askForGroup(groups, title) {
-   const overlay = document.getElementById("groupModalOverlay");
-   const list = document.getElementById("groupList");
-   const sub = document.getElementById("groupModalSub");
-   list.innerHTML = "";
-   sub.textContent = title;
-   groups.forEach(g => {
-       const chip = document.createElement("div");
-       chip.className = "groupChip";
-       chip.innerHTML = groupIconSvg + g.name;
-       chip.onclick = () => {
-           overlay.style.display = "none";
-           if (pendingGroupResolve) { pendingGroupResolve(g.name); pendingGroupResolve = null; }
-           logTelegramGroupSelection(g.name);
-       };
-       list.appendChild(chip);
-   });
-   overlay.style.display = "flex";
-   return new Promise(res => pendingGroupResolve = res);
-}
+    async function logTelegramGroupSelection(groupName) {
+      const user = getTelegramUserInfo();
+      await sendLogToServer("group", { groupName, user });
+    }
 
-function renderSchedule(selectedGroupName) {
-   const rows = currentRows;
-   const view = document.getElementById("excelView");
-   const hint = document.getElementById("groupHint");
-   const group = currentGroups.find(g => g.name === selectedGroupName);
-   if (!group) return;
-   const days = {};
-   let currentDay = null;
-   const dayRegex = /(понедельник|вторник|среда|четверг|пятница|суббота)/i;
-   for (let r of rows) {
-       const dayCell = (r[0] || "").toString().trim();
-       if (dayCell && dayRegex.test(dayCell)) { currentDay = dayCell; if (!days[currentDay]) days[currentDay] = []; continue; }
-       if (!currentDay) continue;
-       const pairNum = r[1];
-       const timeStr = r[2];
-       if (!timeStr || !pairNum) continue;
-       const subject = (r[group.col] || "").toString().trim();
-       const room = (r[group.colRoom] || "").toString().trim();
-       if (!subject) continue;
-       days[currentDay].push({ pair: pairNum, time: timeStr, subject: subject.replace(/\n/g, "<br>"), room: room || "" });
-   }
-   const order = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"];
-   const sortedDays = Object.keys(days).sort((a,b) => {
-       const ia = order.findIndex(d => a.toLowerCase().includes(d.toLowerCase()));
-       const ib = order.findIndex(d => b.toLowerCase().includes(d.toLowerCase()));
-       return (ia === -1 ? 10 : ia) - (ib === -1 ? 10 : ib);
-   });
-   let html = "";
-   for (let dayFullName of sortedDays) {
-       const lessons = days[dayFullName];
-       if (!lessons.length) continue;
-       html += `<div class="dayCard"><div class="dayHeader"><div class="dayDot"></div><div>${dayFullName}<span class="badgeGroup">${selectedGroupName}</span></div></div>`;
-       lessons.sort((a,b) => a.pair - b.pair);
-       for (let les of lessons) {
-           html += `<div class="lessonRow"><div class="lessonTime">${les.time}</div><div class="lessonInfo"><div class="lessonSubject">${les.subject}</div>${les.room ? `<div class="lessonRoom">Ауд. ${les.room}</div>` : ""}</div></div>`;
-       }
-       html += `</div>`;
-   }
-   if (!html) view.innerHTML = "На этой неделе у группы занятий нет.";
-   else { view.innerHTML = html; hint.style.display = "block"; }
-}
+    async function loadFiles() {
+      const listDiv = document.getElementById("fileList");
+      listDiv.innerHTML = "Загрузка файлов из VK…";
+      try {
+        const res = await fetch(`${PROXY_URL}/getFiles`);
+        if (!res.ok) throw new Error("Статус " + res.status);
+        const data = await res.json();
+        const files = data.files;
+        if (!files.length) { listDiv.innerHTML = "XLSX-файлы не найдены."; return; }
 
-document.addEventListener("DOMContentLoaded", () => {
-   try { if (window.Telegram && Telegram.WebApp) Telegram.WebApp.ready(); } catch (e) {}
-   logTelegramWebAppUser();
-   loadFiles();
-});
-</script>
+        listDiv.innerHTML = "";
+        files.forEach(f => {
+          const el = document.createElement("div");
+          el.className = "fileItem";
+          el.onclick = () => openExcelWithGroupSelection(f.url, f.title);
+          el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">Расписание</div></div>`;
+          listDiv.appendChild(el);
+        });
+      } catch (e) {
+        listDiv.innerHTML = "Ошибка VK: " + e.message;
+      }
+    }
+
+    async function openExcelWithGroupSelection(url, title) {
+      const view = document.getElementById("excelView");
+      const titleEl = document.getElementById("excelTitle");
+      const hint = document.getElementById("groupHint");
+      const exportBar = document.getElementById("exportBar");
+
+      titleEl.style.display = "block";
+      titleEl.textContent = title;
+      hint.style.display = "none";
+      exportBar.style.display = "none";
+      view.innerHTML = `<div style="padding:15px;text-align:center;color:#555;"><div class="loaderDark"></div> Загрузка расписания…</div>`;
+
+      try {
+        const res = await fetch(PROXY_URL + "/?url=" + encodeURIComponent(url));
+        if (!res.ok) throw new Error("Статус " + res.status);
+
+        const buf = await res.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+
+        currentRows = rows;
+        currentGroups = detectGroups(rows);
+        currentFileTitle = title;
+
+        if (currentGroups.length === 0) { view.innerHTML = "Группы не найдены в файле."; return; }
+
+        const group = await askForGroup(currentGroups, title);
+        selectedGroupNameGlobal = group;
+        renderSchedule(group);
+
+      } catch (err) {
+        view.innerHTML = "Ошибка загрузки: " + err.message;
+      }
+    }
+
+    function detectGroups(rows) {
+      let headerRow = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const cell = rows[i][0];
+        if (cell && /суббота|понедельник|вторник|среда|четверг|пятница/i.test(cell)) { headerRow = i; break; }
+      }
+      if (headerRow === -1) return [];
+
+      const row = rows[headerRow];
+      const groups = [];
+      for (let c = 3; c < row.length - 1; c++) {
+        const name = (row[c] || "").toString().trim();
+        const next = (row[c + 1] || "").toString().trim();
+        if (name && next === "Ауд." && !name.includes("Ауд.")) groups.push({ name, col: c, colRoom: c + 1 });
+      }
+      return groups;
+    }
+
+    function askForGroup(groups, title) {
+      const overlay = document.getElementById("groupModalOverlay");
+      const list = document.getElementById("groupList");
+      const sub = document.getElementById("groupModalSub");
+      list.innerHTML = "";
+      sub.textContent = title;
+
+      groups.forEach(g => {
+        const chip = document.createElement("div");
+        chip.className = "groupChip";
+        chip.innerHTML = groupIconSvg + g.name;
+        chip.onclick = () => {
+          overlay.style.display = "none";
+          if (pendingGroupResolve) { pendingGroupResolve(g.name); pendingGroupResolve = null; }
+          logTelegramGroupSelection(g.name);
+        };
+        list.appendChild(chip);
+      });
+
+      overlay.style.display = "flex";
+      return new Promise(res => pendingGroupResolve = res);
+    }
+
+    function renderSchedule(selectedGroupName) {
+      const rows = currentRows;
+      const view = document.getElementById("excelView");
+      const hint = document.getElementById("groupHint");
+      const exportBar = document.getElementById("exportBar");
+
+      const group = currentGroups.find(g => g.name === selectedGroupName);
+      if (!group) return;
+
+      const days = {};
+      let currentDay = null;
+      const dayRegex = /(понедельник|вторник|среда|четверг|пятница|суббота)/i;
+
+      for (let r of rows) {
+        const dayCell = (r[0] || "").toString().trim();
+        if (dayCell && dayRegex.test(dayCell)) {
+          currentDay = dayCell;
+          if (!days[currentDay]) days[currentDay] = [];
+          continue;
+        }
+        if (!currentDay) continue;
+
+        const pairNum = r[1];
+        const timeStr = r[2];
+        if (!timeStr || !pairNum) continue;
+
+        const subject = (r[group.col] || "").toString().trim();
+        const room = (r[group.colRoom] || "").toString().trim();
+        if (!subject) continue;
+
+        days[currentDay].push({
+          pair: pairNum,
+          time: timeStr,
+          subject: subject.replace(/\n/g, "<br>"),
+          room: room || ""
+        });
+      }
+
+      const order = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"];
+      const sortedDays = Object.keys(days).sort((a,b) => {
+        const ia = order.findIndex(d => a.toLowerCase().includes(d.toLowerCase()));
+        const ib = order.findIndex(d => b.toLowerCase().includes(d.toLowerCase()));
+        return (ia === -1 ? 10 : ia) - (ib === -1 ? 10 : ib);
+      });
+
+      let html = "";
+      for (let dayFullName of sortedDays) {
+        const lessons = days[dayFullName];
+        if (!lessons.length) continue;
+
+        html += `<div class="dayCard">
+          <div class="dayHeader">
+            <div class="dayDot"></div>
+            <div>${dayFullName}<span class="badgeGroup">${selectedGroupName}</span></div>
+          </div>`;
+
+        lessons.sort((a,b) => a.pair - b.pair);
+        for (let les of lessons) {
+          html += `<div class="lessonRow">
+            <div class="lessonTime">${les.time}</div>
+            <div class="lessonInfo">
+              <div class="lessonSubject">${les.subject}</div>
+              ${les.room ? `<div class="lessonRoom">Ауд. ${les.room}</div>` : ""}
+            </div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+
+      if (!html) {
+        view.innerHTML = "На этой неделе у группы занятий нет.";
+        exportBar.style.display = "none";
+      } else {
+        view.innerHTML = html;
+        hint.style.display = "block";
+        exportBar.style.display = "block";
+      }
+    }
+
+    function requireTelegramUser() {
+      const user = getTelegramUserInfo();
+      if (!user) {
+        alert("Экспорт доступен только внутри Telegram WebApp.");
+        return null;
+      }
+      return user;
+    }
+
+    async function exportSchedulePhotos() {
+      const user = requireTelegramUser();
+      if (!user) return;
+
+      const exportBtn = document.getElementById("exportBtn");
+      exportBtn.disabled = true;
+      exportBtn.textContent = "Готовлю фото…";
+
+      try {
+        const cards = Array.from(document.querySelectorAll(".dayCard"));
+        if (!cards.length) {
+          alert("Нет расписания для экспорта.");
+          return;
+        }
+
+        for (let i = 0; i < cards.length; i++) {
+          exportBtn.textContent = `Отправка… (${i + 1}/${cards.length})`;
+
+          const canvas = await html2canvas(cards[i], {
+            backgroundColor: "#ffffff",
+            scale: 2,
+            useCORS: true
+          });
+
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png", 1));
+          if (!blob) throw new Error("Не удалось создать изображение");
+
+          const form = new FormData();
+          form.append("chat_id", String(user.id));
+          form.append("title", (currentFileTitle || "").toString());
+          form.append("group", (selectedGroupNameGlobal || "").toString());
+          form.append("index", String(i + 1));
+          form.append("total", String(cards.length));
+          form.append("photo", blob, `schedule_${i + 1}.png`);
+
+          const r = await fetch(`${PROXY_URL}/sendSchedulePhoto`, { method: "POST", body: form });
+          if (!r.ok) {
+            const t = await r.text().catch(() => "");
+            throw new Error(t || `Ошибка отправки (HTTP ${r.status})`);
+          }
+        }
+
+        exportBtn.textContent = "Готово ✅";
+        setTimeout(() => {
+          exportBtn.textContent = "Экспорт фото";
+          exportBtn.disabled = false;
+        }, 900);
+
+      } catch (e) {
+        exportBtn.disabled = false;
+        exportBtn.textContent = "Экспорт фото";
+
+        const msg = (e?.message || String(e));
+
+        alert(
+          "Не получилось отправить фото.\n\n" +
+          "Причина часто такая: вы ещё не нажимали Start у бота, и бот не может написать первым.\n\n" +
+          "Ошибка: " + msg
+        );
+
+        try {
+          if (window.Telegram?.WebApp && BOT_USERNAME && BOT_USERNAME !== "YOUR_BOT_USERNAME") {
+            Telegram.WebApp.openTelegramLink(`https://t.me/${BOT_USERNAME}?start=webapp`);
+          }
+        } catch (_) {}
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      try { if (window.Telegram && Telegram.WebApp) Telegram.WebApp.ready(); } catch (e) {}
+      logTelegramWebAppUser();
+      loadFiles();
+
+      document.getElementById("exportBtn").addEventListener("click", exportSchedulePhotos);
+    });
+  </script>
 </body>
 </html>
