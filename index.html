@@ -118,6 +118,87 @@ header {
   stroke-linecap: round;
 }
 
+/* === ПАНЕЛЬ ПЕРЕКЛЮЧАТЕЛЯ GIT === */
+.gitToggleBar {
+  background: #ffffff;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 52px;
+  z-index: 9;
+}
+body.dark-theme .gitToggleBar {
+  background: #020617;
+  border-bottom-color: #1f2937;
+}
+
+.lightningIcon {
+  font-size: 22px;
+  color: #ef4444;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.toggleSwitch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.toggleSwitch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleSlider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  transition: .3s;
+  border-radius: 34px;
+}
+
+.toggleSlider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggleSlider {
+  background-color: #ef4444;
+}
+
+input:checked + .toggleSlider:before {
+  transform: translateX(24px);
+}
+
+.toggleLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+body.dark-theme .toggleLabel {
+  color: #e5e7eb;
+}
+
 main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
 
 #fileListTitle { font-size: 16px; font-weight: 600; margin: 6px 0 4px 2px; color: #555; }
@@ -338,6 +419,16 @@ main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
   <div class="headerTitle">Расписание ТЭТК</div>
 </header>
 
+<!-- === ПАНЕЛЬ ПЕРЕКЛЮЧАТЕЛЯ GIT === -->
+<div class="gitToggleBar">
+  <span class="lightningIcon">⚡</span>
+  <label class="toggleSwitch">
+    <input type="checkbox" id="gitModeToggle">
+    <span class="toggleSlider"></span>
+  </label>
+  <span class="toggleLabel">Расписание с Git</span>
+</div>
+
 <!-- Боковое меню -->
 <div id="sideMenuOverlay">
   <div id="sideMenu">
@@ -368,7 +459,7 @@ main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
 
 <main>
   <div id="fileListTitle">Файлы с расписанием:</div>
-  <div id="fileList">Загрузка файлов из Telegram…</div>
+  <div id="fileList">Загрузка файлов…</div>
   <div id="excelTitle"></div>
   <div class="hint" id="groupHint">Показано расписание выбранной группы.</div>
   <div class="exportBar" id="exportBar">
@@ -400,8 +491,10 @@ let currentGroups = null;
 let currentFileTitle = "";
 let pendingGroupResolve = null;
 let selectedGroupNameGlobal = "";
+let useGitMode = false;
 
 const THEME_KEY = "tetk_theme";
+const GIT_MODE_KEY = "tetk_git_mode";
 
 const xlsIconSvg = `<svg class="fileIcon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2e7d32"></rect><path d="M9 8 L11 12 L9 16 M15 8 L13 12 L15 16" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"></path></svg>`;
 const groupIconSvg = `<svg viewBox="0 0 24 24"><path d="M12 12c1.66 0 2.99-1.34 2.99-3S13.66 6 12 6 9.01 7.34 9.01 9 10.34 12 12 12zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-1.5C19 15.17 14.33 14 12 14z" fill="#2d5fa4"></path></svg>`;
@@ -434,10 +527,11 @@ async function logTelegramGroupSelection(groupName) {
 
 async function loadFiles() {
   const listDiv = document.getElementById("fileList");
-  listDiv.innerHTML = "Загрузка файлов из Telegram…";
+  listDiv.innerHTML = useGitMode ? "Загрузка файлов из Git… ⚡" : "Загрузка файлов из Telegram…";
 
   try {
-    const res = await fetch(`${PROXY_URL}/getFiles`);
+    const endpoint = useGitMode ? "/getFiles?mode=git" : "/getFiles";
+    const res = await fetch(`${PROXY_URL}${endpoint}`);
     if (!res.ok) throw new Error("Статус " + res.status);
     const data = await res.json();
     const files = data.files;
@@ -452,11 +546,11 @@ async function loadFiles() {
       const el = document.createElement("div");
       el.className = "fileItem";
       el.onclick = () => openExcelWithGroupSelection(f.url, f.title);
-      el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">Расписание</div></div>`;
+      el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">Расписание${useGitMode ? " (Git ⚡)" : ""}</div></div>`;
       listDiv.appendChild(el);
     });
   } catch (e) {
-    listDiv.innerHTML = "Ошибка загрузки из Telegram: " + e.message;
+    listDiv.innerHTML = `Ошибка загрузки${useGitMode ? " из Git" : " из Telegram"}: ` + e.message;
   }
 }
 
@@ -473,9 +567,7 @@ async function openExcelWithGroupSelection(url, title) {
   view.innerHTML = `<div style="padding:15px;text-align:center;color:#555;"><div class="loaderDark"></div> Загрузка расписания…</div>`;
 
   try {
-    // ИЗМЕНЕНИЕ: Теперь URL уже содержит полный путь к /getFile
-    // Раньше было: PROXY_URL + "/?url=" + encodeURIComponent(url)
-    // Теперь просто fetch(url), так как url уже = "https://backend.com/getFile?id=..."
+    // Для Git режима URL уже raw ссылка, для Telegram - это /getFile endpoint
     const res = await fetch(url);
     if (!res.ok) throw new Error("Статус " + res.status);
     const buf = await res.arrayBuffer();
@@ -744,6 +836,25 @@ function toggleTheme() {
   try { localStorage.setItem(THEME_KEY, nextTheme); } catch (e) {}
 }
 
+/* ==== GIT MODE ==== */
+function loadGitMode() {
+  try {
+    const saved = localStorage.getItem(GIT_MODE_KEY);
+    useGitMode = saved === "true";
+    document.getElementById("gitModeToggle").checked = useGitMode;
+  } catch (e) {
+    useGitMode = false;
+  }
+}
+
+function toggleGitMode() {
+  useGitMode = document.getElementById("gitModeToggle").checked;
+  try {
+    localStorage.setItem(GIT_MODE_KEY, useGitMode ? "true" : "false");
+  } catch (e) {}
+  loadFiles();
+}
+
 /* ==== МЕНЮ И МОДАЛКА БЛАГОДАРНОСТЕЙ ==== */
 function openSideMenu() {
   const overlay = document.getElementById("sideMenuOverlay");
@@ -776,10 +887,12 @@ function closeThanksModal() {
 document.addEventListener("DOMContentLoaded", () => {
   try { if (window.Telegram && Telegram.WebApp) Telegram.WebApp.ready(); } catch (e) {}
   logTelegramWebAppUser();
-  loadFiles();
   loadSavedTheme();
+  loadGitMode();
+  loadFiles();
 
   document.getElementById("exportBtn").addEventListener("click", exportSchedulePhotos);
+  document.getElementById("gitModeToggle").addEventListener("change", toggleGitMode);
 
   const menuBtn = document.getElementById("menuButton");
   const menuCloseBtn = document.getElementById("sideMenuClose");
