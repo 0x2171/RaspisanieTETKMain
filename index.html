@@ -407,6 +407,22 @@ main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
 .thanksCloseBtn:active {
   transform: scale(0.99);
 }
+
+/* Предупреждение про кэш */
+.cacheWarning {
+  padding: 8px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #fcd34d;
+}
+body.dark-theme .cacheWarning {
+  background: #422006;
+  color: #fcd34d;
+  border-color: #78350f;
+}
 </style>
 </head>
 <body>
@@ -441,6 +457,9 @@ main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
     </button>
     <button class="sideMenuItem" id="thanksBtn">
       Благодарности пользователям
+    </button>
+    <button class="sideMenuItem" id="refreshGitBtn" style="display:none;">
+      🔄 Обновить из Git
     </button>
   </div>
 </div>
@@ -483,8 +502,16 @@ main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
 </div>
 
 <script>
+/* ================== НАСТРОЙКИ ================== */
 const PROXY_URL = "https://raspisanietetk2backend.onrender.com";
 const BOT_USERNAME = "RaspisanieTETK_bot";
+
+/* ================== НАСТРОЙКИ GIT (ПРЯМОЙ ДОСТУП БЕЗ БЕКЕНДА) ================== */
+const GIT_REPO_OWNER = "0x2171";
+const GIT_REPO_NAME  = "RaspisanieFiles";
+const GIT_BRANCH     = "main";
+const GIT_CACHE_KEY  = "tetk_git_files_cache";
+const GIT_CACHE_TTL  = 30 * 60 * 1000; // 30 минут локальный кэш
 
 let currentRows = null;
 let currentGroups = null;
@@ -495,10 +522,12 @@ let useGitMode = false;
 
 const THEME_KEY = "tetk_theme";
 const GIT_MODE_KEY = "tetk_git_mode";
+const GITHUB_TOKEN_KEY = "tetk_github_token"; // опциональный токен для увеличения лимита GitHub API
 
 const xlsIconSvg = `<svg class="fileIcon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2e7d32"></rect><path d="M9 8 L11 12 L9 16 M15 8 L13 12 L15 16" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"></path></svg>`;
 const groupIconSvg = `<svg viewBox="0 0 24 24"><path d="M12 12c1.66 0 2.99-1.34 2.99-3S13.66 6 12 6 9.01 7.34 9.01 9 10.34 12 12 12zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-1.5C19 15.17 14.33 14 12 14z" fill="#2d5fa4"></path></svg>`;
 
+/* ================== ЛОГИРОВАНИЕ В БОТА ================== */
 async function sendLogToServer(type, data) {
   try {
     await fetch(`${PROXY_URL}/log`, {
@@ -525,35 +554,154 @@ async function logTelegramGroupSelection(groupName) {
   await sendLogToServer("group", { groupName, user });
 }
 
-async function loadFiles() {
+/* ================== GIT: ПРЯМОЙ ЗАПРОС К GITHUB API ================== */
+async function fetchFilesFromGit(forceRefresh = false) {
+  // 1. Проверяем локальный кэш (если не принудительное обновление)
+  if (!forceRefresh) {
+    try {
+      const cached = localStorage.getItem(GIT_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.data && parsed.timestamp && (Date.now() - parsed.timestamp < GIT_CACHE_TTL)) {
+          console.log("[Git] Using cached data, age:", Math.round((Date.now() - parsed.timestamp) / 1000), "sec");
+          return parsed.data;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Запрашиваем напрямую GitHub API
+  const apiUrl = `https://api.github.com/repos/${GIT_REPO_OWNER}/${GIT_REPO_NAME}/contents/?ref=${GIT_BRANCH}`;
+
+  const headers = {
+    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "RaspisanieTETK-WebApp"
+  };
+
+  // Опционально: пользовательский GitHub token для увеличения лимита с 60 до 5000 req/hour
+  try {
+    const savedToken = localStorage.getItem(GITHUB_TOKEN_KEY);
+    if (savedToken) {
+      headers["Authorization"] = `token ${savedToken}`;
+    }
+  } catch (e) {}
+
+  const res = await fetch(apiUrl, { headers });
+
+  // Обработка ошибок
+  if (!res.ok) {
+    const remaining = res.headers.get("x-ratelimit-remaining");
+    const resetTs   = res.headers.get("x-ratelimit-reset");
+
+    if (res.status === 403 && remaining === "0") {
+      const resetTime = resetTs ? new Date(parseInt(resetTs) * 1000).toLocaleTimeString() : "позже";
+      throw new Error(`GitHub rate limit исчерпан. Обновится в ${resetTime}.`);
+    }
+
+    if (res.status === 404) {
+      throw new Error(`Репозиторий ${GIT_REPO_OWNER}/${GIT_REPO_NAME} не найден или приватный.`);
+    }
+
+    throw new Error(`GitHub API вернул статус ${res.status}`);
+  }
+
+  const contents = await res.json();
+  const files = [];
+
+  for (const item of contents) {
+    if (item.type === "file" && item.name.toLowerCase().endsWith(".xlsx")) {
+      files.push({
+        url: `https://raw.githubusercontent.com/${GIT_REPO_OWNER}/${GIT_REPO_NAME}/${GIT_BRANCH}/${encodeURIComponent(item.name)}`,
+        title: item.name,
+        messageId: null,
+        size: String(item.size),
+        date: null,
+        source: "git"
+      });
+    }
+  }
+
+  // 3. Сохраняем в локальный кэш
+  try {
+    localStorage.setItem(GIT_CACHE_KEY, JSON.stringify({
+      data: files,
+      timestamp: Date.now()
+    }));
+  } catch (e) {}
+
+  return files;
+}
+
+/* ================== ЗАГРУЗКА ФАЙЛОВ ================== */
+async function loadFiles(forceRefresh = false) {
   const listDiv = document.getElementById("fileList");
   listDiv.innerHTML = useGitMode ? "Загрузка файлов из Git… ⚡" : "Загрузка файлов из Telegram…";
 
   try {
-    const endpoint = useGitMode ? "/getFiles?mode=git" : "/getFiles";
-    const res = await fetch(`${PROXY_URL}${endpoint}`);
-    if (!res.ok) throw new Error("Статус " + res.status);
-    const data = await res.json();
-    const files = data.files;
+    let files;
+
+    if (useGitMode) {
+      // ===== GIT-РЕЖИМ: напрямую к GitHub API (без бекенда) =====
+      files = await fetchFilesFromGit(forceRefresh);
+    } else {
+      // ===== TELEGRAM-РЕЖИМ: через бекенд =====
+      const res = await fetch(`${PROXY_URL}/getFiles`);
+      if (!res.ok) throw new Error("Статус " + res.status);
+      const data = await res.json();
+      files = data.files;
+    }
 
     if (!files.length) {
       listDiv.innerHTML = "XLSX-файлы не найдены.";
       return;
     }
 
-    listDiv.innerHTML = "";
-    files.forEach(f => {
-      const el = document.createElement("div");
-      el.className = "fileItem";
-      el.onclick = () => openExcelWithGroupSelection(f.url, f.title);
-      el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">Расписание${useGitMode ? " (Git ⚡)" : ""}</div></div>`;
-      listDiv.appendChild(el);
-    });
+    renderFileList(files, false);
+
   } catch (e) {
-    listDiv.innerHTML = `Ошибка загрузки${useGitMode ? " из Git" : " из Telegram"}: ` + e.message;
+    console.error("loadFiles error:", e);
+
+    // При ошибке в Git-режиме — показываем старый кэш с предупреждением
+    if (useGitMode) {
+      try {
+        const cached = localStorage.getItem(GIT_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.data && parsed.data.length) {
+            listDiv.innerHTML = "";
+            const warning = document.createElement("div");
+            warning.className = "cacheWarning";
+            warning.textContent = `⚠️ ${e.message} Показаны сохранённые данные.`;
+            listDiv.appendChild(warning);
+            renderFileList(parsed.data, true, listDiv);
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+
+    listDiv.innerHTML = `Ошибка загрузки${useGitMode ? " из Git" : " из Telegram"}: ${e.message}`;
   }
 }
 
+function renderFileList(files, isCached = false, container = null) {
+  const listDiv = container || document.getElementById("fileList");
+  if (!container) listDiv.innerHTML = "";
+
+  files.forEach(f => {
+    const el = document.createElement("div");
+    el.className = "fileItem";
+    el.onclick = () => openExcelWithGroupSelection(f.url, f.title);
+    let metaText = "Расписание";
+    if (useGitMode) {
+      metaText += isCached ? " (кэш ⚠️)" : " (Git ⚡)";
+    }
+    el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">${metaText}</div></div>`;
+    listDiv.appendChild(el);
+  });
+}
+
+/* ================== ОТКРЫТИЕ XLSX ================== */
 async function openExcelWithGroupSelection(url, title) {
   const view = document.getElementById("excelView");
   const titleEl = document.getElementById("excelTitle");
@@ -567,7 +715,8 @@ async function openExcelWithGroupSelection(url, title) {
   view.innerHTML = `<div style="padding:15px;text-align:center;color:#555;"><div class="loaderDark"></div> Загрузка расписания…</div>`;
 
   try {
-    // Для Git режима URL уже raw ссылка, для Telegram - это /getFile endpoint
+    // Для Git: url — это прямая ссылка на raw.githubusercontent.com
+    // Для Telegram: url — это ссылка на /getFile?id=... через бекенд
     const res = await fetch(url);
     if (!res.ok) throw new Error("Статус " + res.status);
     const buf = await res.arrayBuffer();
@@ -724,6 +873,7 @@ function renderSchedule(selectedGroupName) {
   }
 }
 
+/* ================== ЭКСПОРТ ФОТО ================== */
 function requireTelegramUser() {
   const user = getTelegramUserInfo();
   if (!user) {
@@ -842,6 +992,9 @@ function loadGitMode() {
     const saved = localStorage.getItem(GIT_MODE_KEY);
     useGitMode = saved === "true";
     document.getElementById("gitModeToggle").checked = useGitMode;
+    // Показываем кнопку обновления только в Git-режиме
+    const refreshBtn = document.getElementById("refreshGitBtn");
+    if (refreshBtn) refreshBtn.style.display = useGitMode ? "block" : "none";
   } catch (e) {
     useGitMode = false;
   }
@@ -852,6 +1005,8 @@ function toggleGitMode() {
   try {
     localStorage.setItem(GIT_MODE_KEY, useGitMode ? "true" : "false");
   } catch (e) {}
+  const refreshBtn = document.getElementById("refreshGitBtn");
+  if (refreshBtn) refreshBtn.style.display = useGitMode ? "block" : "none";
   loadFiles();
 }
 
@@ -901,6 +1056,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const thanksBtn = document.getElementById("thanksBtn");
   const thanksCloseBtn = document.getElementById("thanksCloseBtn");
   const thanksOverlay = document.getElementById("thanksModalOverlay");
+  const refreshGitBtn = document.getElementById("refreshGitBtn");
 
   if (menuBtn) menuBtn.addEventListener("click", openSideMenu);
   if (menuCloseBtn) menuCloseBtn.addEventListener("click", closeSideMenu);
@@ -930,6 +1086,16 @@ document.addEventListener("DOMContentLoaded", () => {
   if (thanksOverlay) {
     thanksOverlay.addEventListener("click", (e) => {
       if (e.target === thanksOverlay) closeThanksModal();
+    });
+  }
+
+  // Кнопка принудительного обновления из Git
+  if (refreshGitBtn) {
+    refreshGitBtn.addEventListener("click", () => {
+      closeSideMenu();
+      if (useGitMode) {
+        loadFiles(true); // forceRefresh = true
+      }
     });
   }
 });
