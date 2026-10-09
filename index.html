@@ -199,6 +199,26 @@ body.dark-theme .toggleLabel {
   color: #e5e7eb;
 }
 
+/* Селектор источника файлов */
+.sourceSelect {
+  flex-grow: 1;
+  max-width: 220px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #d0ddf5;
+  background: #f5f7ff;
+  color: #2d5fa4;
+  cursor: pointer;
+  outline: none;
+}
+body.dark-theme .sourceSelect {
+  background: #111827;
+  border-color: #1f2937;
+  color: #bfdbfe;
+}
+
 main { padding: 10px; max-width: 900px; margin: 0 auto 40px auto; }
 
 #fileListTitle { font-size: 16px; font-weight: 600; margin: 6px 0 4px 2px; color: #555; }
@@ -435,14 +455,15 @@ body.dark-theme .cacheWarning {
   <div class="headerTitle">Расписание ТЭТК</div>
 </header>
 
-<!-- === ПАНЕЛЬ ПЕРЕКЛЮЧАТЕЛЯ GIT === -->
+<!-- === ПАНЕЛЬ ВЫБОРА ИСТОЧНИКА ФАЙЛОВ (VK / Telegram / GitHub) === -->
 <div class="gitToggleBar">
-  <span class="lightningIcon">⚡</span>
-  <label class="toggleSwitch">
-    <input type="checkbox" id="gitModeToggle">
-    <span class="toggleSlider"></span>
-  </label>
-  <span class="toggleLabel">Расписание с Git</span>
+  <span class="lightningIcon">📂</span>
+  <span class="toggleLabel">Источник:</span>
+  <select id="sourceSelect" class="sourceSelect">
+    <option value="telegram">Telegram</option>
+    <option value="vk">VK</option>
+    <option value="git">GitHub</option>
+  </select>
 </div>
 
 <!-- Боковое меню -->
@@ -459,7 +480,7 @@ body.dark-theme .cacheWarning {
       Благодарности пользователям
     </button>
     <button class="sideMenuItem" id="refreshGitBtn" style="display:none;">
-      🔄 Обновить из Git
+      🔄 Обновить из источника
     </button>
   </div>
 </div>
@@ -518,11 +539,18 @@ let currentGroups = null;
 let currentFileTitle = "";
 let pendingGroupResolve = null;
 let selectedGroupNameGlobal = "";
-let useGitMode = false;
+let currentSource = "telegram"; // "telegram" | "vk" | "git"
 
 const THEME_KEY = "tetk_theme";
-const GIT_MODE_KEY = "tetk_git_mode";
+const SOURCE_KEY = "tetk_source";
 const GITHUB_TOKEN_KEY = "tetk_github_token"; // опциональный токен для увеличения лимита GitHub API
+
+// Названия и подсказки источников (для отображения в UI)
+const SOURCE_INFO = {
+  telegram: { label: "Telegram", loading: "Загрузка файлов из Telegram…" },
+  vk:       { label: "VK",         loading: "Загрузка файлов из VK… 🟦" },
+  git:      { label: "GitHub",     loading: "Загрузка файлов из Git… ⚡" },
+};
 
 const xlsIconSvg = `<svg class="fileIcon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2e7d32"></rect><path d="M9 8 L11 12 L9 16 M15 8 L13 12 L15 16" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"></path></svg>`;
 const groupIconSvg = `<svg viewBox="0 0 24 24"><path d="M12 12c1.66 0 2.99-1.34 2.99-3S13.66 6 12 6 9.01 7.34 9.01 9 10.34 12 12 12zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-1.5C19 15.17 14.33 14 12 14z" fill="#2d5fa4"></path></svg>`;
@@ -632,17 +660,29 @@ async function fetchFilesFromGit(forceRefresh = false) {
   return files;
 }
 
-/* ================== ЗАГРУЗКА ФАЙЛОВ ================== */
+/* ================== ЗАГРУЗКА ФАЙЛОВ (VK / TELEGRAM / GIT) ================== */
 async function loadFiles(forceRefresh = false) {
   const listDiv = document.getElementById("fileList");
-  listDiv.innerHTML = useGitMode ? "Загрузка файлов из Git… ⚡" : "Загрузка файлов из Telegram…";
+  listDiv.innerHTML = SOURCE_INFO[currentSource]?.loading || "Загрузка файлов…";
 
   try {
     let files;
 
-    if (useGitMode) {
+    if (currentSource === "git") {
       // ===== GIT-РЕЖИМ: напрямую к GitHub API (без бекенда) =====
       files = await fetchFilesFromGit(forceRefresh);
+    } else if (currentSource === "vk") {
+      // ===== VK-РЕЖИМ: через бекенд (парсинг топика, БЕЗ ТОКЕНА) =====
+      const params = new URLSearchParams({ mode: "vk" });
+      if (forceRefresh) params.set("refresh", "1");
+      const res = await fetch(`${PROXY_URL}/getFiles?${params}`);
+      if (!res.ok) {
+        let msg = "Статус " + res.status;
+        try { const j = await res.json(); if (j.error) msg += ": " + j.error; } catch (_) {}
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      files = data.files;
     } else {
       // ===== TELEGRAM-РЕЖИМ: через бекенд =====
       const res = await fetch(`${PROXY_URL}/getFiles`);
@@ -662,7 +702,7 @@ async function loadFiles(forceRefresh = false) {
     console.error("loadFiles error:", e);
 
     // При ошибке в Git-режиме — показываем старый кэш с предупреждением
-    if (useGitMode) {
+    if (currentSource === "git") {
       try {
         const cached = localStorage.getItem(GIT_CACHE_KEY);
         if (cached) {
@@ -680,7 +720,7 @@ async function loadFiles(forceRefresh = false) {
       } catch (_) {}
     }
 
-    listDiv.innerHTML = `Ошибка загрузки${useGitMode ? " из Git" : " из Telegram"}: ${e.message}`;
+    listDiv.innerHTML = `Ошибка загрузки из ${SOURCE_INFO[currentSource]?.label || "источника"}: ${e.message}`;
   }
 }
 
@@ -693,9 +733,9 @@ function renderFileList(files, isCached = false, container = null) {
     el.className = "fileItem";
     el.onclick = () => openExcelWithGroupSelection(f.url, f.title);
     let metaText = "Расписание";
-    if (useGitMode) {
-      metaText += isCached ? " (кэш ⚠️)" : " (Git ⚡)";
-    }
+    if (f.source === "vk") metaText += " (VK 🟦)";
+    else if (f.source === "git" || currentSource === "git") metaText += isCached ? " (кэш ⚠️)" : " (Git ⚡)";
+    else if (f.source === "telegram") metaText += " (Telegram)";
     el.innerHTML = xlsIconSvg + `<div style="flex-grow:1"><div class="fileName">${f.title}</div><div class="fileMeta">${metaText}</div></div>`;
     listDiv.appendChild(el);
   });
@@ -716,9 +756,13 @@ async function openExcelWithGroupSelection(url, title) {
 
   try {
     // Для Git: url — это прямая ссылка на raw.githubusercontent.com
-    // Для Telegram: url — это ссылка на /getFile?id=... через бекенд
+    // Для Telegram/VK: url — это ссылка на /getFile?... через бекенд
     const res = await fetch(url);
-    if (!res.ok) throw new Error("Статус " + res.status);
+    if (!res.ok) {
+      let msg = "Статус " + res.status;
+      try { const t = await res.text(); if (t && t.length < 300) msg += ": " + t; } catch (_) {}
+      throw new Error(msg);
+    }
     const buf = await res.arrayBuffer();
 
     const wb = XLSX.read(buf, { type: "array" });
@@ -986,27 +1030,31 @@ function toggleTheme() {
   try { localStorage.setItem(THEME_KEY, nextTheme); } catch (e) {}
 }
 
-/* ==== GIT MODE ==== */
-function loadGitMode() {
+/* ==== ВЫБОР ИСТОЧНИКА ФАЙЛОВ (VK / TELEGRAM / GITHUB) ==== */
+function loadSource() {
+  let saved = null;
   try {
-    const saved = localStorage.getItem(GIT_MODE_KEY);
-    useGitMode = saved === "true";
-    document.getElementById("gitModeToggle").checked = useGitMode;
-    // Показываем кнопку обновления только в Git-режиме
-    const refreshBtn = document.getElementById("refreshGitBtn");
-    if (refreshBtn) refreshBtn.style.display = useGitMode ? "block" : "none";
-  } catch (e) {
-    useGitMode = false;
-  }
+    saved = localStorage.getItem(SOURCE_KEY);
+    // миграция со старого переключателя git-режима
+    if (!saved && localStorage.getItem("tetk_git_mode") === "true") saved = "git";
+  } catch (e) {}
+  currentSource = SOURCE_INFO[saved] ? saved : "telegram";
+  const sel = document.getElementById("sourceSelect");
+  if (sel) sel.value = currentSource;
+  // Показываем кнопку обновления для «сетевых» источников (Git и VK)
+  const refreshBtn = document.getElementById("refreshGitBtn");
+  if (refreshBtn) refreshBtn.style.display = currentSource !== "telegram" ? "block" : "none";
 }
 
-function toggleGitMode() {
-  useGitMode = document.getElementById("gitModeToggle").checked;
+function changeSource(source) {
+  if (!SOURCE_INFO[source]) return;
+  currentSource = source;
   try {
-    localStorage.setItem(GIT_MODE_KEY, useGitMode ? "true" : "false");
+    localStorage.setItem(SOURCE_KEY, source);
   } catch (e) {}
   const refreshBtn = document.getElementById("refreshGitBtn");
-  if (refreshBtn) refreshBtn.style.display = useGitMode ? "block" : "none";
+  if (refreshBtn) refreshBtn.style.display = currentSource !== "telegram" ? "block" : "none";
+  sendLogToServer("source", { source });
   loadFiles();
 }
 
@@ -1043,11 +1091,13 @@ document.addEventListener("DOMContentLoaded", () => {
   try { if (window.Telegram && Telegram.WebApp) Telegram.WebApp.ready(); } catch (e) {}
   logTelegramWebAppUser();
   loadSavedTheme();
-  loadGitMode();
+  loadSource();
   loadFiles();
 
   document.getElementById("exportBtn").addEventListener("click", exportSchedulePhotos);
-  document.getElementById("gitModeToggle").addEventListener("change", toggleGitMode);
+
+  const sourceSelect = document.getElementById("sourceSelect");
+  if (sourceSelect) sourceSelect.addEventListener("change", (e) => changeSource(e.target.value));
 
   const menuBtn = document.getElementById("menuButton");
   const menuCloseBtn = document.getElementById("sideMenuClose");
@@ -1089,11 +1139,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Кнопка принудительного обновления из Git
+  // Кнопка принудительного обновления из выбранного источника (Git / VK)
   if (refreshGitBtn) {
     refreshGitBtn.addEventListener("click", () => {
       closeSideMenu();
-      if (useGitMode) {
+      if (currentSource !== "telegram") {
         loadFiles(true); // forceRefresh = true
       }
     });
