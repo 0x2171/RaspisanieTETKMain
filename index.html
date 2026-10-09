@@ -1038,7 +1038,7 @@ function loadSource() {
     // миграция со старого переключателя git-режима
     if (!saved && localStorage.getItem("tetk_git_mode") === "true") saved = "git";
   } catch (e) {}
-  currentSource = SOURCE_INFO[saved] ? saved : "telegram";
+  currentSource = SOURCE_INFO[saved] ? saved : "vk";
   const sel = document.getElementById("sourceSelect");
   if (sel) sel.value = currentSource;
   // Показываем кнопку обновления для «сетевых» источников (Git и VK)
